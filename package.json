@@ -12,9 +12,14 @@
     "test-sheets": "tsx scripts/test-sheets.ts"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
+    "idb": "^8.0.4",
+    "immer": "^11.2.9",
     "pdf-lib": "^1.17.1",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "zundo": "^2.3.0",
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
