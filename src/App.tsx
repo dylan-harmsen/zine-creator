@@ -1,43 +1,33 @@
-import { useState } from 'react'
-import styles from './App.module.css'
-import { buildTestSheet } from './export/testSheet'
-import { MODES, MODE_IDS, type ModeId } from './imposition/modes'
+import { useEffect, useState } from 'react'
+import { loadFonts } from './fonts'
+import { closeProject, openProject } from './state/session'
+import { Editor } from './ui/Editor'
+import { Home } from './ui/Home'
 
 export function App() {
-  const [busy, setBusy] = useState<ModeId | null>(null)
+  const [fontsReady, setFontsReady] = useState(false)
+  const [openId, setOpenId] = useState<string | null>(null)
 
-  async function download(id: ModeId) {
-    setBusy(id)
+  // Canvas text must never fall back to another font, so nothing renders until fonts load.
+  useEffect(() => {
+    loadFonts().then(() => setFontsReady(true))
+  }, [])
+
+  async function open(id: string) {
     try {
-      const bytes = await buildTestSheet(MODES[id])
-      const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }))
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${id}-test-sheet.pdf`
-      a.click()
-      URL.revokeObjectURL(url)
-    } finally {
-      setBusy(null)
+      await openProject(id)
+      setOpenId(id)
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e))
     }
   }
 
-  return (
-    <main className={styles.main}>
-      <h1>Zine Creator</h1>
-      <p className={styles.lede}>
-        The editor isn't built yet. For now, print a test sheet for each mode at 100% / actual size, then fold and
-        cut it to check that the pages come out in order.
-      </p>
-      <ul className={styles.modes}>
-        {MODE_IDS.map((id) => (
-          <li key={id} className={styles.mode}>
-            <span>{MODES[id].name}</span>
-            <button onClick={() => download(id)} disabled={busy !== null}>
-              {busy === id ? 'Building…' : 'Download test sheet'}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </main>
-  )
+  async function back() {
+    // Leave the editor before the project is cleared from the store.
+    setOpenId(null)
+    await closeProject()
+  }
+
+  if (!fontsReady) return null
+  return openId ? <Editor onBack={back} /> : <Home onOpen={open} />
 }
