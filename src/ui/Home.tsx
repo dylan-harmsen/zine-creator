@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { buildTestSheet } from '../export/testSheet'
 import { MODES, MODE_IDS, type ModeId } from '../imposition/modes'
+import { ORIENTATIONS, pageSize, type Orientation } from '../imposition/orientation'
 import { newProject } from '../model/types'
 import { createProject, importZineFile } from '../state/session'
 import { deleteProject, listProjects, type ProjectRecord } from '../storage/db'
@@ -22,6 +23,8 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
   const [projects, setProjects] = useState<ProjectRecord[] | null>(null)
   const [name, setName] = useState('')
   const [mode, setMode] = useState<ModeId>('a4-mini')
+  const [orientation, setOrientation] = useState<Orientation>('portrait')
+  const [landscapeTests, setLandscapeTests] = useState(false)
   const importInput = useRef<HTMLInputElement>(null)
 
   const refresh = () => listProjects().then(setProjects)
@@ -29,7 +32,7 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
 
   async function create(e: React.FormEvent) {
     e.preventDefault()
-    const project = newProject(mode, name.trim() || 'Untitled zine')
+    const project = newProject(mode, name.trim() || 'Untitled zine', orientation)
     await createProject(project)
     onOpen(project.id)
   }
@@ -53,10 +56,24 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
               <input type="radio" name="mode" value={id} checked={mode === id} onChange={() => setMode(id)} />
               <strong>{MODES[id].name}</strong>
               <span>
-                {MODES[id].pageWidthMm} × {MODES[id].pageHeightMm} mm pages
+                {pageSize(MODES[id], orientation).width} × {pageSize(MODES[id], orientation).height} mm pages
               </span>
             </label>
           ))}
+        </div>
+        <div className={styles.orientationRow}>
+          <div className={styles.segmented} role="radiogroup" aria-label="Page orientation">
+            {ORIENTATIONS.map((o) => (
+              <button key={o} type="button" role="radio" aria-checked={orientation === o} onClick={() => setOrientation(o)}>
+                {o === 'portrait' ? 'Portrait pages' : 'Landscape pages'}
+              </button>
+            ))}
+          </div>
+          <span className={styles.muted}>
+            {orientation === 'portrait'
+              ? 'Opens sideways, like a book.'
+              : 'Opens upward, like a calendar. Same sheet and folds.'}
+          </span>
         </div>
         <div className={styles.createRow}>
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" aria-label="Name" />
@@ -94,7 +111,10 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
               <button className={styles.projectOpen} onClick={() => onOpen(r.id)}>
                 <Thumbnail blob={r.thumbnail} />
                 <strong>{r.project.name}</strong>
-                <span className={styles.muted}>{MODES[r.project.mode].name}</span>
+                <span className={styles.muted}>
+                  {MODES[r.project.mode].name}
+                  {r.project.orientation === 'landscape' && ', landscape'}
+                </span>
                 <span className={styles.muted}>Edited {new Date(r.project.updatedAt).toLocaleString()}</span>
               </button>
               <button className={styles.delete} onClick={() => remove(r)} aria-label={`Delete ${r.project.name}`}>
@@ -112,12 +132,20 @@ export function Home({ onOpen }: { onOpen: (id: string) => void }) {
           {MODE_IDS.map((id) => (
             <button
               key={id}
-              onClick={async () => downloadBytes(await buildTestSheet(MODES[id]), `${id}-test-sheet.pdf`, 'application/pdf')}
+              onClick={async () => {
+                const o: Orientation = landscapeTests ? 'landscape' : 'portrait'
+                const suffix = landscapeTests ? '-landscape' : ''
+                downloadBytes(await buildTestSheet(MODES[id], o), `${id}${suffix}-test-sheet.pdf`, 'application/pdf')
+              }}
             >
               {MODES[id].name}
             </button>
           ))}
         </div>
+        <label className={styles.check}>
+          <input type="checkbox" checked={landscapeTests} onChange={(e) => setLandscapeTests(e.target.checked)} />
+          Landscape pages
+        </label>
       </section>
     </main>
   )

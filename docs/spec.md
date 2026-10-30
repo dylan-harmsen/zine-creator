@@ -13,7 +13,7 @@ A browser app for making printable fold-and-cut zines. You fill pages in reading
 
 ## Modes
 
-A project's mode is chosen at creation and cannot be changed.
+A project's mode and page orientation are chosen at creation and cannot be changed.
 
 Page maps are listed by sheet row, left to right, as seen on the printed side. `↻` = panel rotated 180°.
 
@@ -55,20 +55,35 @@ Page maps are listed by sheet row, left to right, as seen on the printed side. `
 - Crop marks are always printed. Assembly: trim to the crop marks, then fold and cut as for the A4 8-panel.
 - Bleed: 3 mm on the outer edges of the grid only (no bleed on internal fold/cut edges). Per-project setting, on by default, also toggleable in the export dialog. Crop marks sit outside the bleed.
 
+### Page orientation
+
+- **Portrait** (default): the page maps above. The booklet opens sideways, like a book.
+- **Landscape**: same sheet, page map, folds and cuts, with every page turned a quarter turn anticlockwise in its slot (page width and height swap). The finished booklet is the portrait booklet turned a quarter turn clockwise: the spine runs along the top of the front cover, pages flip upward like a calendar, and facing pages sit one above the other.
+- Bleed, printer-margin guides and the instructions diagram follow the turned page. Landscape exports add a step telling the reader to flip upward. Test sheets come in both orientations.
+
 ### Imposition data
 
 Each mode's imposition is pure data: a table mapping each sheet slot to a page number and rotation (0° or 180°), plus the mode's cut and fold segments. Instruction diagrams and guide lines are derived from the same data.
 
 ## Content model
 
-- A project has a name, a mode, and exactly 8 or 16 pages.
+- A project has a name, a mode, an orientation, and exactly 8 or 16 pages.
 - Page 1 is labelled "Front cover", the last page "Back cover".
 - Pages can be reordered by dragging thumbnails. Pages cannot be added or deleted.
 - Each page has:
   - **Background colour** — default white.
-  - **At most one image** — cover-fill by default; drag to pan, slider to zoom; "fit whole image" toggle. No rotation, filters, multiple images, or images spanning a spread.
+  - **At most one image** — cover-fill by default; drag to pan, slider to zoom; "fit whole image" toggle. No rotation, filters or multiple images.
+  - **Merged with its facing page** (optional), see below.
   - **Any number of text boxes** — move freely; width is set by the user, height grows to fit the text. Properties: font, size, colour, alignment (left/centre/right), optional solid background colour. Plain text only (no mixed styles within a box).
 - No automatic page numbers.
+
+### Merged pages
+
+- The two pages of a facing pair (2–3, 4–5, … — never the covers, and never across spreads such as 3–4) can be merged so one image runs across both, for wide photos.
+- Every facing pair is printed side by side across a fold, so a merged image prints as one continuous picture.
+- The image lives on the pair's first page and is laid out over both trim boxes (plus the bleed of both pages, when on). Each page keeps its own background and text boxes.
+- Merging keeps the first page's image (or the second's if the first has none) and recentres it. Splitting leaves the image on the first page.
+- Reordering moves a merged pair as a whole, and only onto another facing pair. A single-page move that would split a merged pair or shift it off its facing pair is not allowed.
 
 ### Images
 
@@ -85,7 +100,7 @@ Each mode's imposition is pure data: a table mapping each sheet slot to a page n
 
 ## Editor
 
-- Pages are edited in reading order, with a thumbnail strip and an open-book spread preview (1 alone, then 2–3, 4–5, …, last page alone).
+- Pages are edited in reading order, with a thumbnail strip and an open-book spread preview (1 alone, then 2–3, 4–5, …, last page alone). Landscape spreads are stacked vertically.
 - A separate read-only "Print sheet" view shows the imposed sheet.
 - Rendering: a single `renderPage(page, scale)` canvas function is used by both the editor and the export. A DOM overlay handles interaction only (selection handles, drag regions, in-place textarea while editing text).
 - Editor-only guides (never rendered into the PDF):
@@ -99,7 +114,7 @@ Each mode's imposition is pure data: a table mapping each sheet slot to a page n
 - Multiple projects stored in IndexedDB. Home screen lists them with thumbnails.
 - New project flow: pick mode, enter name.
 - Autosave: every change is persisted (debounced). No Save button.
-- Backup/transfer: save and load a project as a `.zine` file (zip of project JSON + image files).
+- Backup/transfer: save and load a project as a `.zine` file (zip of project JSON + image files). Version 2 added orientation and merged pages; version 1 files still open (as portrait, nothing merged).
 
 ## Export
 

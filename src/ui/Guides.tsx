@@ -1,8 +1,10 @@
 // Editor-only guides. These are never drawn by renderPage, so they can't
 // reach the PDF.
 
-import { gridTouchesSheetEdge, outerEdges, type Edges } from '../imposition/edges'
+import { gridTouchesSheetEdge, outerEdges } from '../imposition/edges'
 import type { ZineMode } from '../imposition/modes'
+import type { Orientation } from '../imposition/orientation'
+import type { PageFrame } from '../model/pageLayout'
 
 /** Typical unprintable margin of a home printer. */
 export const PRINTER_MARGIN_MM = 4
@@ -10,16 +12,16 @@ export const SAFE_ZONE_MM = 2
 
 interface Props {
   mode: ZineMode
+  orientation: Orientation
   pageNumber: number
-  bleed: Edges
+  frame: PageFrame
 }
 
-export function Guides({ mode, pageNumber, bleed }: Props) {
-  const w = mode.pageWidthMm
-  const h = mode.pageHeightMm
+export function Guides({ mode, orientation, pageNumber, frame }: Props) {
+  const { width: w, height: h, bleed } = frame
   const W = w + bleed.left + bleed.right
   const H = h + bleed.top + bleed.bottom
-  const outer = outerEdges(mode.id, pageNumber)
+  const outer = outerEdges(mode.id, pageNumber, orientation)
   const pm = PRINTER_MARGIN_MM
   const printer = gridTouchesSheetEdge(mode.id)
 

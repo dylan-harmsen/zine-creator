@@ -34,6 +34,25 @@ describe.each(MODE_IDS)('%s', (id) => {
     expect(g.y - mode.bleedMm).toBeGreaterThanOrEqual(0)
   })
 
+  it('puts each facing pair side by side across a fold, in reading order', () => {
+    // So an image merged across a facing pair prints as one continuous picture.
+    const folds = foldSegments(mode)
+    for (let first = 2; first < mode.pageCount; first += 2) {
+      const a = mode.slots.findIndex((s) => s.page === first)
+      const b = mode.slots.findIndex((s) => s.page === first + 1)
+      const [rowA, colA] = [Math.floor(a / mode.columns), a % mode.columns]
+      const [rowB, colB] = [Math.floor(b / mode.columns), b % mode.columns]
+      const rotation = mode.slots[a].rotation
+      expect(mode.slots[b].rotation).toBe(rotation)
+      expect(rowB).toBe(rowA)
+      // Upright, the first page is on the left; turned, on the right.
+      expect(colB - colA).toBe(rotation === 0 ? 1 : -1)
+      const x = Math.max(colA, colB)
+      const onFold = folds.some((f) => f.x1 === x && f.x2 === x && f.y1 <= rowA && f.y2 >= rowA + 1)
+      expect(onFold).toBe(true)
+    }
+  })
+
   it('keeps cuts on interior grid lines', () => {
     for (const c of mode.cuts) {
       expect(c.x1 === c.x2 || c.y1 === c.y2).toBe(true)

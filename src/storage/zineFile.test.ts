@@ -1,3 +1,4 @@
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { describe, expect, it } from 'vitest'
 import { newProject } from '../model/types'
 import { packZine, unpackZine, withFreshIds, type ZineAsset } from './zineFile'
@@ -27,6 +28,24 @@ describe('.zine files', () => {
     const unpacked = unpackZine(packZine(project, assets))
     expect(unpacked.project).toEqual(project)
     expect(unpacked.assets).toEqual(assets)
+  })
+
+  it('round-trips landscape projects and merged pairs', () => {
+    const { project, assets } = sample()
+    project.orientation = 'landscape'
+    project.pages[1].mergedWithNext = true
+    expect(unpackZine(packZine(project, assets)).project).toEqual(project)
+  })
+
+  it('opens version 1 files, which predate orientation and merging', () => {
+    const { project, assets } = sample()
+    const old = JSON.parse(JSON.stringify(project))
+    delete old.orientation
+    for (const p of old.pages) delete p.mergedWithNext
+    const files = unzipSync(packZine(old, assets))
+    const manifest = JSON.parse(strFromU8(files['project.json']))
+    files['project.json'] = strToU8(JSON.stringify({ ...manifest, version: 1 }))
+    expect(unpackZine(zipSync(files)).project).toEqual(project)
   })
 
   it('rejects files that are not .zine files', () => {

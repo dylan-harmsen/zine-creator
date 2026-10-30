@@ -4,6 +4,7 @@
 import { PDFDocument, StandardFonts, degrees, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
 import { foldSegments, placedPages, toSheet } from '../imposition/geometry'
 import { MODES, type ModeId, type ZineMode } from '../imposition/modes'
+import { contentRotation, type Orientation } from '../imposition/orientation'
 import type { Project } from '../model/types'
 import { composeSheet } from '../render/composeSheet'
 import type { ImageSource } from '../render/renderPage'
@@ -40,7 +41,7 @@ export async function buildZinePdf(
   const embedded = await doc.embedJpg(new Uint8Array(await jpeg.arrayBuffer()))
   sheet.drawImage(embedded, { x: 0, y: 0, width: sheetSize[0], height: sheetSize[1] })
 
-  if (options.instructions) await drawInstructions(doc, mode)
+  if (options.instructions) await drawInstructions(doc, mode, project.orientation)
   return doc.save()
 }
 
@@ -74,7 +75,10 @@ const STEPS: Record<ModeId, string[]> = {
   ],
 }
 
-async function drawInstructions(doc: PDFDocument, mode: ZineMode) {
+const LANDSCAPE_STEP =
+  'This zine has landscape pages: hold it with the folded spine along the top of the front cover and flip the pages upward, like a calendar.'
+
+async function drawInstructions(doc: PDFDocument, mode: ZineMode, orientation: Orientation) {
   const page = doc.addPage([210 * PT_PER_MM, 297 * PT_PER_MM])
   const regular = await doc.embedFont(StandardFonts.Helvetica)
   const bold = await doc.embedFont(StandardFonts.HelveticaBold)
@@ -85,7 +89,8 @@ async function drawInstructions(doc: PDFDocument, mode: ZineMode) {
   page.drawText(`How to fold: ${mode.name}`, { x: margin, y, size: 16, font: bold })
   y -= 28
 
-  STEPS[mode.id].forEach((step, i) => {
+  const steps = orientation === 'landscape' ? [...STEPS[mode.id], LANDSCAPE_STEP] : STEPS[mode.id]
+  steps.forEach((step, i) => {
     for (const [j, line] of wrapPdf(step, regular, 11, width - 18).entries()) {
       if (j === 0) page.drawText(`${i + 1}.`, { x: margin, y, size: 11, font: bold })
       page.drawText(line, { x: margin + 18, y, size: 11, font: regular })
@@ -105,10 +110,18 @@ async function drawInstructions(doc: PDFDocument, mode: ZineMode) {
   // Sheet diagram, scaled to the page width and placed under the steps.
   const scale = Math.min(width / mode.sheetWidthMm, (y - margin - 20) / mode.sheetHeightMm)
   const top = y - 20
-  drawDiagram(page, mode, margin, top, scale, bold)
+  drawDiagram(page, mode, orientation, margin, top, scale, bold)
 }
 
-function drawDiagram(page: PDFPage, mode: ZineMode, left: number, top: number, scale: number, font: PDFFont) {
+function drawDiagram(
+  page: PDFPage,
+  mode: ZineMode,
+  orientation: Orientation,
+  left: number,
+  top: number,
+  scale: number,
+  font: PDFFont,
+) {
   const X = (mm: number) => left + mm * scale
   const Y = (mm: number) => top - mm * scale
   page.drawRectangle({
@@ -130,13 +143,17 @@ function drawDiagram(page: PDFPage, mode: ZineMode, left: number, top: number, s
     const w = font.widthOfTextAtSize(label, size)
     const cx = X(r.x + r.width / 2)
     const cy = Y(r.y + r.height / 2)
-    const sign = placed.rotation === 180 ? -1 : 1
+    // Labels turn with their page. pdf-lib turns text anticlockwise about its
+    // origin, so step back from the centre along the turned text to find it.
+    const angle = -contentRotation(placed.rotation, orientation)
+    const rad = (angle * Math.PI) / 180
+    const [ox, oy] = [w / 2, size * 0.35]
     page.drawText(label, {
-      x: cx - (sign * w) / 2,
-      y: cy - (sign * size * 0.35),
+      x: cx - (ox * Math.cos(rad) - oy * Math.sin(rad)),
+      y: cy - (ox * Math.sin(rad) + oy * Math.cos(rad)),
       size,
       font,
-      rotate: degrees(placed.rotation),
+      rotate: degrees(angle),
       color: rgb(0.2, 0.2, 0.2),
     })
   }

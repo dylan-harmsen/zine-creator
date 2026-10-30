@@ -1,9 +1,10 @@
 // Draws a whole imposed sheet: every page in its slot (rotated as needed),
 // then fold, cut and crop lines. Used by the Print sheet view and the PDF export.
 
-import { bleedEdges } from '../imposition/edges'
 import { cropMarkSegments, foldSegments, placedPages, toSheet, type Segment } from '../imposition/geometry'
 import { MODES } from '../imposition/modes'
+import { contentRotation } from '../imposition/orientation'
+import { pageFrame, placeImage } from '../model/pageLayout'
 import type { Project } from '../model/types'
 import { renderPage, type ImageSource } from './renderPage'
 
@@ -29,19 +30,15 @@ export function composeSheet(
   ctx.fillRect(0, 0, mode.sheetWidthMm * s, mode.sheetHeightMm * s)
 
   for (const placed of placedPages(mode)) {
-    const page = project.pages[placed.page - 1]
+    const index = placed.page - 1
+    const frame = pageFrame(project, index)
     const { rect } = placed
     ctx.save()
+    // Turn the page about its slot's centre; a landscape page fills the slot sideways.
     ctx.translate((rect.x + rect.width / 2) * s, (rect.y + rect.height / 2) * s)
-    if (placed.rotation === 180) ctx.rotate(Math.PI)
-    ctx.translate((-rect.width / 2) * s, (-rect.height / 2) * s)
-    renderPage(ctx, page, {
-      pxPerMm: s,
-      pageWidth: rect.width,
-      pageHeight: rect.height,
-      bleed: bleedEdges(project.mode, project.bleed, placed.page),
-      images,
-    })
+    ctx.rotate((contentRotation(placed.rotation, project.orientation) * Math.PI) / 180)
+    ctx.translate((-frame.width / 2) * s, (-frame.height / 2) * s)
+    renderPage(ctx, project.pages[index], { pxPerMm: s, frame, image: placeImage(project, index), images })
     ctx.restore()
   }
 
