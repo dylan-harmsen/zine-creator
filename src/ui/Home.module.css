@@ -190,3 +190,41 @@
   gap: 0.5rem;
   margin-top: 0.75rem;
 }
+
+.orientationRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.home .segmented button {
+  border: none;
+  border-radius: 0;
+  font-size: 0.9rem;
+}
+
+.home .segmented button + button {
+  border-left: 1px solid var(--border);
+}
+
+.home .segmented button[aria-checked="true"] {
+  background: var(--fg);
+  color: var(--surface);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+}

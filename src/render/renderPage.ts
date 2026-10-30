@@ -1,8 +1,7 @@
 // The one page renderer. The editor, thumbnails, the Print sheet view and the
 // PDF export all draw pages through this function.
 
-import type { Edges } from '../imposition/edges'
-import { layoutImage } from '../model/imageLayout'
+import type { ImagePlacement, PageFrame } from '../model/pageLayout'
 import type { Page } from '../model/types'
 import { TEXT_PADDING, fontString, layoutTextBox } from './textLayout'
 
@@ -10,9 +9,9 @@ export type ImageSource = CanvasImageSource
 
 export interface RenderOptions {
   pxPerMm: number
-  pageWidth: number
-  pageHeight: number
-  bleed: Edges
+  frame: PageFrame
+  /** The page's image, or its share of a merged pair's image. */
+  image: ImagePlacement | null
   images: Record<string, ImageSource | undefined>
   /** Text box being edited in place; the editor draws it as a textarea instead. */
   hiddenTextId?: string
@@ -24,23 +23,24 @@ export interface RenderOptions {
  */
 export function renderPage(ctx: CanvasRenderingContext2D, page: Page, o: RenderOptions) {
   const s = o.pxPerMm
+  const { width, height, bleed } = o.frame
   ctx.save()
   ctx.beginPath()
   ctx.rect(
-    -o.bleed.left * s,
-    -o.bleed.top * s,
-    (o.pageWidth + o.bleed.left + o.bleed.right) * s,
-    (o.pageHeight + o.bleed.top + o.bleed.bottom) * s,
+    -bleed.left * s,
+    -bleed.top * s,
+    (width + bleed.left + bleed.right) * s,
+    (height + bleed.top + bleed.bottom) * s,
   )
   ctx.clip()
 
   ctx.fillStyle = page.background
   ctx.fill()
 
-  if (page.image) {
-    const source = o.images[page.image.assetId]
+  if (o.image) {
+    const source = o.images[o.image.image.assetId]
     if (source) {
-      const l = layoutImage(page.image, o.pageWidth, o.pageHeight, o.bleed)
+      const l = o.image.layout
       ctx.imageSmoothingQuality = 'high'
       ctx.drawImage(source, l.x * s, l.y * s, l.width * s, l.height * s)
     }

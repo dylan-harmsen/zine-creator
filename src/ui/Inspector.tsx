@@ -2,9 +2,10 @@
 
 import { useRef } from 'react'
 import { FONTS } from '../fonts'
-import { bleedEdges } from '../imposition/edges'
 import { MODES } from '../imposition/modes'
-import { LOW_DPI, MAX_ZOOM, effectiveDpi, layoutImage } from '../model/imageLayout'
+import { LOW_DPI, MAX_ZOOM, effectiveDpi } from '../model/imageLayout'
+import { placeImage } from '../model/pageLayout'
+import { facingPair, imageOwner, isMerged } from '../model/spreads'
 import { pageLabel, type Align } from '../model/types'
 import { useEditor } from '../state/editorStore'
 import { addImageToPage } from '../state/session'
@@ -28,12 +29,14 @@ export function Inspector() {
   const page = project.pages[index]
   const mode = MODES[project.mode]
   const box = page.texts.find((t) => t.id === selectedTextId)
-  const image = page.image
-  const dpi = image
-    ? Math.round(
-        effectiveDpi(image, layoutImage(image, mode.pageWidthMm, mode.pageHeightMm, bleedEdges(project.mode, project.bleed, index + 1))),
-      )
-    : null
+  // On a merged pair, the image belongs to the pair's first page.
+  const owner = project.pages[imageOwner(project.pages, index)]
+  const image = owner.image
+  const placement = placeImage(project, index)
+  const dpi = placement ? Math.round(effectiveDpi(placement.image, placement.layout)) : null
+  const pair = facingPair(project.pages.length, index)
+  const partner = pair && (pair[0] === index ? pair[1] : pair[0])
+  const merged = isMerged(project.pages, index)
 
   return (
     <aside className={styles.inspector}>
@@ -55,17 +58,40 @@ export function Inspector() {
             if (file) addImageToPage(page.id, file).catch((err: Error) => alert(err.message))
           }}
         />
+        {partner !== null && (
+          <div className={styles.group}>
+            {merged ? (
+              <>
+                <p className={styles.hint}>
+                  Merged with {pageLabel(partner, project.pages.length).toLowerCase()}: one image runs across both pages.
+                </p>
+                <button className={styles.button} onClick={() => actions.setMerged(page.id, false)}>
+                  Split pages
+                </button>
+              </>
+            ) : (
+              <button
+                className={styles.button}
+                onClick={() => actions.setMerged(page.id, true)}
+                title="Run one image across both facing pages, for wide photos"
+              >
+                Merge with {pageLabel(partner, project.pages.length).toLowerCase()}
+              </button>
+            )}
+          </div>
+        )}
+
         {!image ? (
           <button className={styles.button} onClick={() => fileInput.current?.click()}>
-            Add image
+            {merged ? 'Add image across both pages' : 'Add image'}
           </button>
         ) : (
           <div className={styles.group}>
             <div className={styles.segmented} role="radiogroup" aria-label="Image fit">
-              <button aria-pressed={image.fit === 'cover'} onClick={() => actions.updateImage(page.id, { fit: 'cover', panX: 0, panY: 0 })}>
-                Fill page
+              <button aria-pressed={image.fit === 'cover'} onClick={() => actions.updateImage(owner.id, { fit: 'cover', panX: 0, panY: 0 })}>
+                {merged ? 'Fill both pages' : 'Fill page'}
               </button>
-              <button aria-pressed={image.fit === 'contain'} onClick={() => actions.updateImage(page.id, { fit: 'contain', panX: 0, panY: 0 })}>
+              <button aria-pressed={image.fit === 'contain'} onClick={() => actions.updateImage(owner.id, { fit: 'contain', panX: 0, panY: 0 })}>
                 Fit whole image
               </button>
             </div>
@@ -77,7 +103,7 @@ export function Inspector() {
                 max={MAX_ZOOM}
                 step={0.01}
                 value={image.zoom}
-                onChange={(e) => actions.updateImage(page.id, { zoom: Number(e.target.value) })}
+                onChange={(e) => actions.updateImage(owner.id, { zoom: Number(e.target.value) })}
               />
             </label>
             <p className={dpi !== null && dpi < LOW_DPI ? styles.warning : styles.hint}>
@@ -88,10 +114,10 @@ export function Inspector() {
               <button className={styles.button} onClick={() => fileInput.current?.click()}>
                 Replace
               </button>
-              <button className={styles.button} onClick={() => actions.updateImage(page.id, { zoom: 1, panX: 0, panY: 0 })}>
+              <button className={styles.button} onClick={() => actions.updateImage(owner.id, { zoom: 1, panX: 0, panY: 0 })}>
                 Reset
               </button>
-              <button className={styles.button} onClick={() => actions.updatePage(page.id, { image: null })}>
+              <button className={styles.button} onClick={() => actions.updatePage(owner.id, { image: null })}>
                 Remove
               </button>
             </div>
@@ -165,7 +191,10 @@ export function Inspector() {
 
       <section className={styles.section}>
         <h2>Project</h2>
-        <p className={styles.hint}>{mode.name}</p>
+        <p className={styles.hint}>
+          {mode.name}, {project.orientation} pages
+          {project.orientation === 'landscape' && ' – the booklet opens upward, like a calendar'}
+        </p>
         {mode.bleedMm > 0 && (
           <label className={styles.check}>
             <input type="checkbox" checked={project.bleed} onChange={(e) => actions.setBleed(e.target.checked)} />

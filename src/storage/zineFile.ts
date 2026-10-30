@@ -1,10 +1,11 @@
 // The `.zine` file: a zip holding project.json and one file per image asset.
 
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import { newId, type Project } from '../model/types'
+import { newId, normalizeProject, type Project, type StoredProject } from '../model/types'
 
 export const ZINE_FORMAT = 'zine-creator'
-export const ZINE_VERSION = 1
+/** 2 added landscape orientation and merged pairs. */
+export const ZINE_VERSION = 2
 
 export interface ZineAsset {
   id: string
@@ -17,7 +18,7 @@ export interface ZineAsset {
 interface Manifest {
   format: typeof ZINE_FORMAT
   version: number
-  project: Project
+  project: StoredProject
   assets: Omit<ZineAsset, 'bytes'>[]
 }
 
@@ -51,7 +52,7 @@ export function unpackZine(data: Uint8Array): { project: Project; assets: ZineAs
     if (!bytes) throw new Error(`This .zine file is missing an image (${a.id}).`)
     return { ...a, bytes }
   })
-  return { project: manifest.project, assets }
+  return { project: normalizeProject(manifest.project), assets }
 }
 
 /**

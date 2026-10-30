@@ -2,7 +2,7 @@
 // project saves stay small; assets are keyed by id and indexed by project.
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { Project } from '../model/types'
+import { normalizeProject, type Project, type StoredProject } from '../model/types'
 
 export interface AssetRecord {
   id: string
@@ -18,8 +18,11 @@ export interface ProjectRecord {
   thumbnail: Blob | null
 }
 
+/** As read back: the project may predate fields added since. */
+type StoredRecord = Omit<ProjectRecord, 'project'> & { project: StoredProject }
+
 interface ZineDB extends DBSchema {
-  projects: { key: string; value: ProjectRecord }
+  projects: { key: string; value: StoredRecord }
   assets: { key: string; value: AssetRecord; indexes: { byProject: string } }
 }
 
@@ -37,11 +40,14 @@ function db() {
 
 export async function listProjects(): Promise<ProjectRecord[]> {
   const all = await (await db()).getAll('projects')
-  return all.sort((a, b) => b.project.updatedAt - a.project.updatedAt)
+  return all
+    .map((r) => ({ ...r, project: normalizeProject(r.project) }))
+    .sort((a, b) => b.project.updatedAt - a.project.updatedAt)
 }
 
 export async function getProject(id: string): Promise<Project | undefined> {
-  return (await (await db()).get('projects', id))?.project
+  const record = await (await db()).get('projects', id)
+  return record && normalizeProject(record.project)
 }
 
 export async function putProject(project: Project, thumbnail: Blob | null) {

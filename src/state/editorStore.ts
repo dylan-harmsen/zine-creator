@@ -4,7 +4,7 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import { temporal } from 'zundo'
-import { movePage } from '../model/spreads'
+import { facingPair, movePages } from '../model/spreads'
 import { newTextBox, type Page, type PageImage, type Project, type TextBox } from '../model/types'
 
 export type View = 'pages' | 'sheet'
@@ -27,7 +27,10 @@ interface EditorState {
 
   rename: (name: string) => void
   setBleed: (bleed: boolean) => void
+  /** Moves a page, or a merged pair as a whole; does nothing if the move isn't allowed. */
   reorderPage: (from: number, to: number) => void
+  /** Merges or splits the facing pair holding the page. */
+  setMerged: (pageId: string, merged: boolean) => void
   updatePage: (pageId: string, change: Partial<Omit<Page, 'id' | 'texts'>>) => void
   updateImage: (pageId: string, change: Partial<PageImage>) => void
   addText: (pageId: string) => string
@@ -45,7 +48,7 @@ function findPage(project: Project, pageId: string): Page | undefined {
 
 export const useEditor = create<EditorState>()(
   temporal(
-    immer((set) => {
+    immer((set, get) => {
       /** Applies a change to the open project and stamps it. */
       const edit = (fn: (project: Project) => void) =>
         set((s) => {
@@ -99,7 +102,26 @@ export const useEditor = create<EditorState>()(
 
         rename: (name) => edit((p) => void (p.name = name)),
         setBleed: (bleed) => edit((p) => void (p.bleed = bleed)),
-        reorderPage: (from, to) => edit((p) => void (p.pages = movePage(p.pages, from, to))),
+        reorderPage: (from, to) => {
+          const pages = get().project?.pages
+          if (from === to || !pages || !movePages(pages, from, to)) return
+          edit((p) => void (p.pages = movePages(p.pages, from, to)!))
+        },
+        setMerged: (pageId, merged) => {
+          const pages = get().project?.pages ?? []
+          const index = pages.findIndex((pg) => pg.id === pageId)
+          const pair = index < 0 ? null : facingPair(pages.length, index)
+          if (!pair || pages[pair[0]].mergedWithNext === merged) return
+          edit((p) => {
+            const [first, second] = [p.pages[pair[0]], p.pages[pair[1]]]
+            first.mergedWithNext = merged
+            // The pair keeps the first page's image, or else the second's.
+            const image = first.image ?? (merged ? second.image : null)
+            if (merged) second.image = null
+            // The image's frame changes size, so start it centred again.
+            first.image = image && { ...image, zoom: 1, panX: 0, panY: 0 }
+          })
+        },
         updatePage: (pageId, change) =>
           edit((p) => {
             const page = findPage(p, pageId)
@@ -116,7 +138,7 @@ export const useEditor = create<EditorState>()(
             if (!s.project) return
             const page = findPage(s.project, pageId)
             if (!page) return
-            const box = newTextBox(s.project.mode)
+            const box = newTextBox(s.project.mode, s.project.orientation)
             id = box.id
             page.texts.push(box)
             s.project.updatedAt = Date.now()

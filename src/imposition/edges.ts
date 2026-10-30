@@ -3,6 +3,7 @@
 // top edge at the sheet's bottom side).
 
 import { MODES, type ModeId } from './modes'
+import { orientEdges, type Orientation } from './orientation'
 
 export interface Edges {
   top: number
@@ -21,7 +22,7 @@ export interface EdgeFlags {
 export const NO_EDGES: Edges = { top: 0, right: 0, bottom: 0, left: 0 }
 
 /** `pageNumber` is 1-based, as in the imposition tables. */
-export function outerEdges(modeId: ModeId, pageNumber: number): EdgeFlags {
+export function outerEdges(modeId: ModeId, pageNumber: number, orientation: Orientation): EdgeFlags {
   const mode = MODES[modeId]
   const index = mode.slots.findIndex((s) => s.page === pageNumber)
   if (index < 0) throw new Error(`Page ${pageNumber} is not in ${modeId}`)
@@ -33,15 +34,18 @@ export function outerEdges(modeId: ModeId, pageNumber: number): EdgeFlags {
     left: col === 0,
     right: col === mode.columns - 1,
   }
-  if (mode.slots[index].rotation === 0) return sheet
-  return { top: sheet.bottom, bottom: sheet.top, left: sheet.right, right: sheet.left }
+  const portrait =
+    mode.slots[index].rotation === 0
+      ? sheet
+      : { top: sheet.bottom, bottom: sheet.top, left: sheet.right, right: sheet.left }
+  return orientEdges(portrait, orientation)
 }
 
 /** Bleed in mm on each edge of a page; zero when bleed is off or unsupported. */
-export function bleedEdges(modeId: ModeId, bleedOn: boolean, pageNumber: number): Edges {
+export function bleedEdges(modeId: ModeId, bleedOn: boolean, pageNumber: number, orientation: Orientation): Edges {
   const mm = MODES[modeId].bleedMm
   if (!bleedOn || mm === 0) return NO_EDGES
-  const outer = outerEdges(modeId, pageNumber)
+  const outer = outerEdges(modeId, pageNumber, orientation)
   return {
     top: outer.top ? mm : 0,
     right: outer.right ? mm : 0,

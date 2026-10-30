@@ -2,10 +2,10 @@
 // layer (image panning, text box selection, moving, resizing and editing).
 
 import { useLayoutEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react'
-import { bleedEdges } from '../imposition/edges'
-import type { ZineMode } from '../imposition/modes'
-import { LOW_DPI, effectiveDpi, layoutImage } from '../model/imageLayout'
-import { pageLabel, type Page, type TextBox } from '../model/types'
+import { MODES } from '../imposition/modes'
+import { LOW_DPI, effectiveDpi } from '../model/imageLayout'
+import { pageFrame, placeImage } from '../model/pageLayout'
+import { pageLabel, type Project, type TextBox } from '../model/types'
 import { LINE_HEIGHT, MM_PER_PT, TEXT_PADDING, layoutTextBox } from '../render/textLayout'
 import { useEditor } from '../state/editorStore'
 import { addImageToPage } from '../state/session'
@@ -16,10 +16,8 @@ import { PageCanvas } from './PageCanvas'
 const MIN_TEXT_WIDTH_MM = 5
 
 interface Props {
-  page: Page
+  project: Project
   index: number
-  mode: ZineMode
-  bleedOn: boolean
   pxPerMm: number
 }
 
@@ -49,27 +47,31 @@ function drag(e: ReactPointerEvent, pxPerMm: number, onMove: (dxMm: number, dyMm
   target.addEventListener('pointercancel', up)
 }
 
-export function PageView({ page, index, mode, bleedOn, pxPerMm }: Props) {
+export function PageView({ project, index, pxPerMm }: Props) {
   const s = pxPerMm
+  const page = project.pages[index]
+  const mode = MODES[project.mode]
   const pageNumber = index + 1
-  const bleed = bleedEdges(mode.id, bleedOn, pageNumber)
+  const frame = pageFrame(project, index)
+  const { bleed } = frame
   const selected = useEditor((st) => st.selectedPageId === page.id)
   const selectedTextId = useEditor((st) => st.selectedTextId)
   const editingTextId = useEditor((st) => st.editingTextId)
   const showGuides = useEditor((st) => st.showGuides)
   const { selectPage, selectText, setEditingText, updateImage, updateText } = useEditor.getState()
 
-  const imageLayout = page.image ? layoutImage(page.image, mode.pageWidthMm, mode.pageHeightMm, bleed) : null
-  const lowDpi = page.image && imageLayout ? effectiveDpi(page.image, imageLayout) < LOW_DPI : false
+  const placement = placeImage(project, index)
+  const lowDpi = placement ? effectiveDpi(placement.image, placement.layout) < LOW_DPI : false
 
   function onBackgroundDown(e: ReactPointerEvent) {
     if (e.button !== 0) return
     selectPage(page.id)
     selectText(null)
-    if (!page.image || !imageLayout) return
+    if (!placement) return
     // Start from the clamped pan so dragging responds immediately after a zoom change.
-    const { panX, panY } = imageLayout
-    drag(e, s, (dx, dy) => updateImage(page.id, { panX: panX + dx, panY: panY + dy }))
+    const { panX, panY } = placement.layout
+    const ownerId = project.pages[placement.ownerIndex].id
+    drag(e, s, (dx, dy) => updateImage(ownerId, { panX: panX + dx, panY: panY + dy }))
   }
 
   function onTextDown(e: ReactPointerEvent, box: TextBox) {
@@ -93,15 +95,15 @@ export function PageView({ page, index, mode, bleedOn, pxPerMm }: Props) {
       <div
         className={`${styles.page} ${selected ? styles.pageSelected : ''}`}
         style={{
-          width: (mode.pageWidthMm + bleed.left + bleed.right) * s,
-          height: (mode.pageHeightMm + bleed.top + bleed.bottom) * s,
+          width: (frame.width + bleed.left + bleed.right) * s,
+          height: (frame.height + bleed.top + bleed.bottom) * s,
         }}
       >
-        <PageCanvas page={page} mode={mode} bleed={bleed} pxPerMm={s} hiddenTextId={editingTextId ?? undefined} />
-        {showGuides && <Guides mode={mode} pageNumber={pageNumber} bleed={bleed} />}
+        <PageCanvas page={page} frame={frame} image={placement} pxPerMm={s} hiddenTextId={editingTextId ?? undefined} />
+        {showGuides && <Guides mode={mode} orientation={project.orientation} pageNumber={pageNumber} frame={frame} />}
         <div
           className={styles.trim}
-          style={{ left: bleed.left * s, top: bleed.top * s, width: mode.pageWidthMm * s, height: mode.pageHeightMm * s }}
+          style={{ left: bleed.left * s, top: bleed.top * s, width: frame.width * s, height: frame.height * s }}
           onPointerDown={onBackgroundDown}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
@@ -134,7 +136,10 @@ export function PageView({ page, index, mode, bleedOn, pxPerMm }: Props) {
         </div>
         {lowDpi && <span className={styles.dpiBadge} title="This image will look blurry when printed. Use a larger image or zoom out.">Low resolution</span>}
       </div>
-      <figcaption className={styles.pageCaption}>{pageLabel(index, mode.pageCount)}</figcaption>
+      <figcaption className={styles.pageCaption}>
+        {pageLabel(index, mode.pageCount)}
+        {placement?.spread && ' · merged'}
+      </figcaption>
     </figure>
   )
 }
